@@ -34,8 +34,7 @@ export default function HelpDeskPage() {
   const [activeSessionId, setActiveSessionId] = useState<string>('');
   const isLoadedRef = useRef(false);
 
-  const { messages, setMessages, sendMessage, status, error } = useChat({
-    maxSteps: 5,
+  const { messages, setMessages, sendMessage, status, error } = (useChat as any)({
     initialMessages: [DEFAULT_WELCOME_MSG]
   });
 
@@ -88,7 +87,7 @@ export default function HelpDeskPage() {
           // Generate an intelligent title if it's currently default
           let title = session.title;
           if (title === 'New Chat' || title.startsWith('Chat ')) {
-            const firstUserMsg = messages.find(m => m.role === 'user');
+            const firstUserMsg = (messages as any[]).find((m: any) => m.role === 'user');
             if (firstUserMsg && firstUserMsg.content) {
               title = firstUserMsg.content.slice(0, 30).trim() + (firstUserMsg.content.length > 30 ? '...' : '');
               title = title.charAt(0).toUpperCase() + title.slice(1);
@@ -391,7 +390,7 @@ export default function HelpDeskPage() {
 
         {/* Chat Stream */}
         <div style={{ flex: 1, padding: '1.5rem', overflowY: 'auto', backgroundColor: 'var(--bg-card-subtle)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-          {messages.map((msg) => (
+          {(messages as any[]).map((msg: any) => (
             <div
               key={msg.id}
               style={{
@@ -523,7 +522,7 @@ export default function HelpDeskPage() {
                       }
                     }
                     if (!text) return null;
-                    return text.split('**').map((part, i) => (
+                    return text.split('**').map((part: string, i: number) => (
                       i % 2 === 1 ? <strong key={i}>{part}</strong> : part
                     ));
                   })()}

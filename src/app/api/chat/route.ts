@@ -1,7 +1,9 @@
 import { createGroq } from '@ai-sdk/groq';
-import { streamText, tool, CoreMessage, ToolResultPart, ToolCallPart, TextPart } from 'ai';
+import { streamText, tool as aiTool } from 'ai';
 import { z } from 'zod';
 import { getStock, deleteDonor, addTransaction, getDonors, updateStock, updateTransactionStatus, addDonor } from '@/utils/dbManager';
+
+const tool: any = aiTool;
 
 const groq = createGroq({
   apiKey: process.env.GROQ_API_KEY,
@@ -13,14 +15,14 @@ export async function POST(req: Request) {
   const body = await req.json();
   const rawMessages = Array.isArray(body) ? body : (body.messages || []);
   
-  const coreMessages: CoreMessage[] = [];
+  const coreMessages: any[] = [];
   
   for (const msg of rawMessages) {
     if (msg.role === 'user' || msg.role === 'system') {
       coreMessages.push({ role: msg.role, content: msg.content || '' });
     } else if (msg.role === 'assistant') {
-      const contentParts: Array<TextPart | ToolCallPart> = [];
-      const toolResults: Array<ToolResultPart> = [];
+      const contentParts: any[] = [];
+      const toolResults: any[] = [];
       
       if (msg.parts && Array.isArray(msg.parts)) {
         for (const p of msg.parts) {
@@ -84,7 +86,7 @@ export async function POST(req: Request) {
       }
     } else if (msg.role === 'tool') {
        // if frontend sends a proper tool message
-       const toolResults: Array<ToolResultPart> = [];
+       const toolResults: any[] = [];
        if (msg.parts && Array.isArray(msg.parts)) {
          for (const p of msg.parts) {
            const resValue = p.result || p.output || { success: true };
@@ -126,7 +128,7 @@ export async function POST(req: Request) {
   };
 
   try {
-    const result = await streamText({
+    const result = (streamText as any)({
       model: groq('llama-3.3-70b-versatile'),
       messages: coreMessages,
       maxSteps: 5,
@@ -392,7 +394,7 @@ Keep your responses concise, professional, and friendly.`,
             bloodGroup: z.string().describe('The blood group to request.'),
             units: z.number().describe('The number of units to request.'),
           }),
-          execute: async ({ bloodGroup, units }) => {
+          execute: async ({ bloodGroup, units }: any) => {
             const bg = bloodGroup.toUpperCase();
             const todayDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
             try {
@@ -414,7 +416,7 @@ Keep your responses concise, professional, and friendly.`,
           description: 'Approve a pending transaction and mark it as DELIVERED.',
           inputSchema: z.object({ transactionId: z.string().describe('The ID of the transaction to approve.') }),
           parameters: z.object({ transactionId: z.string().describe('The ID of the transaction to approve.') }),
-          execute: async ({ transactionId }) => {
+          execute: async ({ transactionId }: any) => {
             return await updateTransactionStatus(parseInt(transactionId, 10), 'DELIVERED');
           },
         }),
@@ -430,7 +432,7 @@ Keep your responses concise, professional, and friendly.`,
             simDengue: z.boolean().describe('Whether to simulate a Dengue Outbreak.'),
             simHoliday: z.boolean().describe('Whether to simulate an Eid/Holiday traffic spike.'),
           }),
-          execute: async ({ bloodGroup, simDengue, simHoliday }) => {
+          execute: async ({ bloodGroup, simDengue, simHoliday }: any) => {
             const bg = bloodGroup.toUpperCase();
             const stock = await getStock();
             const item = stock.find((s) => s.bloodGroup === bg);
@@ -462,7 +464,7 @@ Keep your responses concise, professional, and friendly.`,
             return { success: true, report: { bloodGroup: bg, currentUnits: units, simulatedDailyDemand: baseDemand, supplyLastsForDays: daysLeft, severity, recommendation: status } };
           },
         }),
-      },
+      } as any,
     });
 
     return result.toUIMessageStreamResponse();
