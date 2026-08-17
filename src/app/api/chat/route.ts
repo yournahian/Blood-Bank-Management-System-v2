@@ -423,8 +423,8 @@ Keep your responses concise, professional, and friendly.`,
               });
               return { 
                 success: true, 
-                transactionId: tx.transactionId,
-                message: `Successfully created requisition (#${tx.transactionId}): ${uCount} unit(s) of ${bg} for patient "${pName}" at "${hName}". Status is PENDING approval.` 
+                transactionId: tx.id,
+                message: `Successfully created requisition (#${tx.id}): ${uCount} unit(s) of ${bg} for patient "${pName}" at "${hName}". Status is PENDING approval.` 
               };
             } catch (e) {
               return { success: false, message: `Failed to create request: ${(e as Error).message}` };
