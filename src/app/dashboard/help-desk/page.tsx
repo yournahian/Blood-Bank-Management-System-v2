@@ -41,7 +41,10 @@ export default function HelpDeskPage() {
   const chatEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 1. Initial Load from LocalStorage
+  const activeSessionIdRef = useRef<string>('');
+  activeSessionIdRef.current = activeSessionId;
+
+  // 1. Initial Load from LocalStorage (Runs only once on mount)
   useEffect(() => {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
@@ -75,16 +78,18 @@ export default function HelpDeskPage() {
       console.error('Failed to load chat history from storage:', e);
       isLoadedRef.current = true;
     }
-  }, [setMessages]);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 2. Auto-save messages to active session
+  // 2. Auto-save messages to active session (only when message streaming finishes to prevent infinite render depth)
   useEffect(() => {
-    if (!isLoadedRef.current || !activeSessionId || messages.length === 0) return;
+    const currentId = activeSessionIdRef.current;
+    if (!isLoadedRef.current || !currentId || messages.length === 0) return;
+    if (status === 'streaming' || status === 'submitted') return; // Wait until stream is finished
 
     setSessions(prevSessions => {
+      let changed = false;
       const updated = prevSessions.map(session => {
-        if (session.id === activeSessionId) {
-          // Generate an intelligent title if it's currently default
+        if (session.id === currentId) {
           let title = session.title;
           if (title === 'New Chat' || title.startsWith('Chat ')) {
             const firstUserMsg = (messages as any[]).find((m: any) => m.role === 'user');
@@ -94,6 +99,7 @@ export default function HelpDeskPage() {
             }
           }
 
+          changed = true;
           return {
             ...session,
             title,
@@ -104,6 +110,8 @@ export default function HelpDeskPage() {
         return session;
       });
 
+      if (!changed) return prevSessions;
+
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
       } catch (e) {
@@ -111,7 +119,7 @@ export default function HelpDeskPage() {
       }
       return updated;
     });
-  }, [messages, activeSessionId]);
+  }, [messages, status]);
 
   // 3. Switch between chat sessions
   const switchSession = (sessionId: string) => {

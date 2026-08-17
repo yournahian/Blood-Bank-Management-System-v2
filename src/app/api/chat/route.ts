@@ -128,8 +128,9 @@ export async function POST(req: Request) {
   };
 
   try {
+    const selectedModel = process.env.GROQ_MODEL || 'openai/gpt-oss-120b';
     const result = (streamText as any)({
-      model: groq('llama-3.3-70b-versatile'),
+      model: groq(selectedModel),
       messages: coreMessages,
       maxSteps: 5,
       system: `You are the Actionable AI Assistant for the Blood Bank Management System (BBMS).
@@ -150,7 +151,14 @@ CRITICAL INSTRUCTIONS FOR TOOL CALLS:
 5. When asked to delete a donor (e.g. "delete donor 5"), call delete_donor with { donorId: 5 }.
 6. When asked about stock for a specific blood group (e.g. "how much a- blood we have?", "check O- stock"), call check_stock with { bloodGroup: "A-" }.
 7. When asked to check all stock, overall inventory, or expiry dates (e.g. "check expiry", "show stock", "list all inventory"), call check_all_stock with {}.
-8. When a hospital requests blood, call request_blood with { bloodGroup: "...", units: ... }.
+8. When the user asks to request blood for a patient or place an emergency requisition (e.g. "i would like to req blood for patient", "request blood", "need blood for hospital"):
+   - DO NOT call request_blood with missing or empty details.
+   - Conversationally ask the user to provide all 4 required details:
+     • Patient Name
+     • Hospital Name
+     • Blood Group needed (e.g. A+, O-, B+)
+     • Number of units required
+   - ONLY call request_blood when the user has provided the patient name, hospital name, blood group, and unit count.
 9. When asked to run AI demand prediction, call run_demand_prediction with { bloodGroup: "...", simDengue: false, simHoliday: false }.
 
 ALWAYS answer the user with a helpful, conversational summary of the result after executing any tool.
@@ -385,28 +393,39 @@ Keep your responses concise, professional, and friendly.`,
           },
         }),
         request_blood: tool({
-          description: 'Submit a pending request for blood units on behalf of a hospital.',
+          description: 'Submit an emergency or hospital blood requisition for a patient into the database. ONLY call this when the user has provided patient name, hospital name, blood group, and units.',
           inputSchema: z.object({
-            bloodGroup: z.string().describe('The blood group to request.'),
-            units: z.number().describe('The number of units to request.'),
+            patientName: z.string().describe('Full name of the patient'),
+            hospitalName: z.string().describe('Name of the hospital where the patient is admitted'),
+            bloodGroup: z.string().describe('The blood group to request (e.g. A+, O-, B+, AB+)'),
+            units: z.number().describe('The number of units to request (positive integer)'),
           }),
           parameters: z.object({
-            bloodGroup: z.string().describe('The blood group to request.'),
-            units: z.number().describe('The number of units to request.'),
+            patientName: z.string().describe('Full name of the patient'),
+            hospitalName: z.string().describe('Name of the hospital where the patient is admitted'),
+            bloodGroup: z.string().describe('The blood group to request (e.g. A+, O-, B+, AB+)'),
+            units: z.number().describe('The number of units to request (positive integer)'),
           }),
-          execute: async ({ bloodGroup, units }: any) => {
-            const bg = bloodGroup.toUpperCase();
+          execute: async ({ patientName, hospitalName, bloodGroup, units }: any) => {
+            const bg = (bloodGroup || 'A+').toUpperCase().trim();
             const todayDate = new Date().toLocaleDateString('en-GB').replace(/\//g, '-');
+            const pName = (patientName || 'Emergency Patient').trim();
+            const hName = (hospitalName || 'General Hospital').trim();
+            const uCount = Number(units) || 1;
             try {
-              await addTransaction({
-                patientName: 'Agent Request',
-                hospitalName: 'Hospital Portal (Agent)',
+              const tx = await addTransaction({
+                patientName: pName,
+                hospitalName: hName,
                 bloodGroup: bg,
-                units: units,
+                units: uCount,
                 date: todayDate,
                 status: 'PENDING'
               });
-              return { success: true, message: `Successfully submitted request for ${units} units of ${bg}.` };
+              return { 
+                success: true, 
+                transactionId: tx.transactionId,
+                message: `Successfully created requisition (#${tx.transactionId}): ${uCount} unit(s) of ${bg} for patient "${pName}" at "${hName}". Status is PENDING approval.` 
+              };
             } catch (e) {
               return { success: false, message: `Failed to create request: ${(e as Error).message}` };
             }
